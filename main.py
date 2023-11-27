@@ -1,8 +1,8 @@
 import os
-from fastapi import FastAPI, UploadFile
+from fastapi import FastAPI, UploadFile, Response
 from services.search import FingerprintPipeline
 from services.crawler import crawl_songs
-
+from services.to_wav import m4a_to_wav
 
 api = FastAPI()
 
@@ -24,10 +24,17 @@ async def upload_file(file: UploadFile):
             with open(filePath, "wb") as f:
                 f.write(file.file.read())
 
-            fingerprint_obj = FingerprintPipeline()
-            songs = fingerprint_obj.recognize(file.filename)
+            #convert the song into wav with single channel.
+            m4a_to_wav(file.filename)
 
-            return {"songs": songs}
+            fingerprint_obj = FingerprintPipeline()
+            songs = fingerprint_obj.recognize(file.filename + ".wav")
+
+            print("@@ Songs: ", songs)
+
+            return {
+                "songs": songs
+            }
 
     except Exception as e:
         print("ERROR: ---- ", e)
