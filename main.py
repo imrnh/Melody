@@ -3,9 +3,12 @@ from fastapi import FastAPI, UploadFile, Response
 from services.search import FingerprintPipeline
 from services.crawler import crawl_songs
 from services.to_wav import m4a_to_wav
+from humming.routes import router
 
 api = FastAPI()
 
+
+api.include_router(router) 
 
 @api.get("/crawle")
 async def perform_crawling():

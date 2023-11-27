@@ -1,0 +1,16 @@
+-- Table 1: Song Information
+CREATE TABLE songs (
+    id INTEGER PRIMARY KEY,
+    song_id INTEGER,
+    song_name TEXT,
+    youtube_url TEXT,
+    artist TEXT
+);
+
+-- Table 2: Song Lyrics
+CREATE TABLE lyrics (
+    id INTEGER PRIMARY KEY,
+    song_id INTEGER,
+    lyrics TEXT,
+    FOREIGN KEY (song_id) REFERENCES songs(song_id)
+);
