@@ -1,5 +1,6 @@
 import os, asyncpg, json, pickle
 from fastapi import APIRouter, UploadFile, Form
+from pydantic import BaseModel
 from .search import FingerprintPipeline
 from .to_wav import m4a_to_wav
 from .downloader import MusicDownloader
@@ -37,13 +38,12 @@ async def perform_crawling():
         music_downloader_obj = MusicDownloader()
         list_of_hash_pairs: Dict[int, List[Tuple[int, int]]] = {}
 
-        #save current db before removing all items.
+        # save current db before removing all items.
         with open("../database/database.pickle", "rb") as db:
             curr_database = pickle.load(db)
             list_of_hash_pairs = curr_database
 
-
-        #build db for other songs.
+        # build db for other songs.
         for r_music in r_response:
             print("Working with id: ", r_music["id"])
             output_wav_file = music_downloader_obj.download_and_convert(r_music["url"])
@@ -59,8 +59,10 @@ async def perform_crawling():
                 list_of_hash_pairs[ad_hash].append(time_index_pair)
 
             # make the hash available as true.
-            query_update_audio_hash_available = "update music set audio_hash_available=true where id = $1;"
-            await connection.execute(query_update_audio_hash_available, r_music['id'])
+            query_update_audio_hash_available = (
+                "update music set audio_hash_available=true where id = $1;"
+            )
+            await connection.execute(query_update_audio_hash_available, r_music["id"])
 
         with open(database_file, "wb") as db:
             pickle.dump(list_of_hash_pairs, db, pickle.HIGHEST_PROTOCOL)
@@ -95,36 +97,44 @@ async def upload_file(file: UploadFile, user_id: str = Form(...)):
             fingerprint_obj = FingerprintPipeline()
             song_ids = fingerprint_obj.recognize(file.filename + ".wav")
 
-            await save_identification_history(uid=user_id, song_id=song_ids[0])
+            hs_status, err = await save_identification_history(
+                uid=user_id, song_id=song_ids[0]
+            )
+            if hs_status:
+                # get song info
+                songs = []
 
-            # get song info
-            songs = []
+                conn = await asyncpg.connect(DATABASE_URL)
 
-            conn = await asyncpg.connect(DATABASE_URL)
+                for song_id in song_ids:
+                    _qry = "SELECT m.id,  m.mname, m.artist_id, m.playback_url, m.cover_image, a.artist_name FROM music m INNER JOIN artist a ON m.artist_id = a.id WHERE m.id = $1;"
+                    res = await conn.fetch(_qry, song_id)
+                    songs.append(res[0])
 
-            for song_id in song_ids:
-                _qry = "select * from music where id=$1;"
-                res = await conn.fetch(_qry, song_id)
-                songs.append(res)
-
-            return {"songs": songs}
+                return {"songs": songs}
+            else:
+                raise err
 
     except Exception as e:
         print("Exception: ", e)
     return {"message": "No file received"}
 
 
+
+class ViewHistoryModel(BaseModel):
+    user_id : str
+
 @router.post("/view_history/")
-async def upload_file(user_id: str):
+async def view_history(vhm: ViewHistoryModel):
     conn = await asyncpg.connect(DATABASE_URL)
 
-    _qry = "select * from  history where  user_id = $1;"
-    resulting_music_ids = await conn.fetch(_qry, user_id)
+    _qry = "select song_id from history where  user_id = $1;"
+    resulting_music_ids = await conn.fetch(_qry, vhm.user_id)
 
     songs = []
-    for song_id in resulting_music_ids:
-        _qry = "select * from music where id=$1;"
-        res = await conn.fetch(_qry, song_id)
-        songs.append(res)
-
+    for song_rec in resulting_music_ids:
+        _qry = "SELECT m.id,  m.mname, m.artist_id, m.playback_url, m.cover_image, a.artist_name FROM music m INNER JOIN artist a ON m.artist_id = a.id WHERE m.id = $1;"
+        res = await conn.fetch(_qry, song_rec['song_id'])
+        songs.append(res[0])
+    print("REtunred: ", songs)
     return {"songs": songs}
