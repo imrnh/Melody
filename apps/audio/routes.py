@@ -9,7 +9,7 @@ from utilities import save_identification_history, load_identification_history
 
 router = APIRouter()
 
-DATABASE_URL = config('DATABASE_URL')
+DATABASE_URL = config("DATABASE_URL")
 
 
 @router.get("/crawle")
@@ -18,12 +18,12 @@ async def perform_crawling():
         # crawl_msg = crawl_songs()
         # return {"msg": f"Succesfully crawled {crawl_msg} songs"}
         """
-            TODO:
-                - iterate over music table in db for all song with audio_hash_available as false.
-                - for every song, download the video and convert it into hashes.
-                - push hashes to db along with song id
-                - for that song in music table, tick the audio_hash_available field to true.
-                - repeat 2-4 till the end of cursor.
+        TODO:
+            - iterate over music table in db for all song with audio_hash_available as false.
+            - for every song, download the video and convert it into hashes.
+            - push hashes to db along with song id
+            - for that song in music table, tick the audio_hash_available field to true.
+            - repeat 2-4 till the end of cursor.
         """
 
         database_file = "database/database.pickle"
@@ -35,22 +35,36 @@ async def perform_crawling():
 
         # Iterate over all music, download the video and convert it into hashes.
         music_downloader_obj = MusicDownloader()
+        list_of_hash_pairs: Dict[int, List[Tuple[int, int]]] = {}
+
+        #save current db before removing all items.
+        with open("../database/database.pickle", "rb") as db:
+            curr_database = pickle.load(db)
+            list_of_hash_pairs = curr_database
+
+
+        #build db for other songs.
         for r_music in r_response:
-            output_wav_file = music_downloader_obj.download_and_convert(r_music['url'])
+            print("Working with id: ", r_music["id"])
+            output_wav_file = music_downloader_obj.download_and_convert(r_music["url"])
 
             fingerprint_obj = FingerprintPipeline()
-            audio_hashes = fingerprint_obj.transform_audio(output_wav_file, r_music['id'])
-
-            list_of_hash_pairs: Dict[int, List[Tuple[int, int]]] = {}
+            audio_hashes = fingerprint_obj.transform_audio(
+                output_wav_file, r_music["id"]
+            )
 
             for ad_hash, time_index_pair in audio_hashes.items():
                 if ad_hash not in list_of_hash_pairs:
                     list_of_hash_pairs[ad_hash] = []
                 list_of_hash_pairs[ad_hash].append(time_index_pair)
 
-            with open(database_file, "wb") as db:
-                pickle.dump(list_of_hash_pairs, db, pickle.HIGHEST_PROTOCOL)
-                print("Database operation performed for song ", r_music['id'])
+            # make the hash available as true.
+            query_update_audio_hash_available = "update music set audio_hash_available=true where id = $1;"
+            await connection.execute(query_update_audio_hash_available, r_music['id'])
+
+        with open(database_file, "wb") as db:
+            pickle.dump(list_of_hash_pairs, db, pickle.HIGHEST_PROTOCOL)
+            print("Database operation performed for song ", r_music["id"])
 
             # for hash_point, song_info_list in list_of_hash_pairs.items():
             #     query_to_add_hash = "INSERT INTO music_hash (hash, info, music_id) VALUES ($1, $2, $3);"
@@ -93,7 +107,6 @@ async def upload_file(file: UploadFile, user_id: str = Form(...)):
                 res = await conn.fetch(_qry, song_id)
                 songs.append(res)
 
-
             return {"songs": songs}
 
     except Exception as e:
@@ -103,17 +116,15 @@ async def upload_file(file: UploadFile, user_id: str = Form(...)):
 
 @router.post("/view_history/")
 async def upload_file(user_id: str):
+    conn = await asyncpg.connect(DATABASE_URL)
 
-        conn = await asyncpg.connect(DATABASE_URL)
+    _qry = "select * from  history where  user_id = $1;"
+    resulting_music_ids = await conn.fetch(_qry, user_id)
 
-        _qry = "select * from  history where  user_id = $1;"
-        resulting_music_ids = await conn.fetch(_qry, user_id);
+    songs = []
+    for song_id in resulting_music_ids:
+        _qry = "select * from music where id=$1;"
+        res = await conn.fetch(_qry, song_id)
+        songs.append(res)
 
-
-        songs = []
-        for song_id in resulting_music_ids:
-            _qry = "select * from music where id=$1;"
-            res = await conn.fetch(_qry, song_id)
-            songs.append(res)
-
-        return {'songs': songs}
+    return {"songs": songs}

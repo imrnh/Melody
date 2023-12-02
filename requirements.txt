@@ -12,3 +12,6 @@ hashlib
 pytube
 pydantic
 tqdm
+decouple
+pydantic
+tqdm
