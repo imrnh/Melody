@@ -4,3 +4,4 @@ uvicorn
 pydub
 ffprobe
 python-decouple
+asyncpg
