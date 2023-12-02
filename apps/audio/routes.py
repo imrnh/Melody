@@ -98,7 +98,7 @@ async def upload_file(file: UploadFile, user_id: str = Form(...)):
             song_ids = fingerprint_obj.recognize(file.filename + ".wav")
 
             hs_status, err = await save_identification_history(
-                uid=user_id, song_id=song_ids[0]
+                user_id, song_ids[0]
             )
             if hs_status:
                 # get song info
