@@ -39,3 +39,10 @@ create table lyrics_hash(
   window_size INT,
   music_id INT REFERENCES music(id)
  );
+
+
+create table history(
+  id serial primary key,
+  user_id TEXT, --from firebase. not going to save in local db. therefore no reference.
+    song_id INT references music(id)
+);

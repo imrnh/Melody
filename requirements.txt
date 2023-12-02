@@ -1,6 +1,14 @@
-tqdm
 fastapi
 uvicorn
 pydub
 ffprobe
 python-decouple
+asyncpg
+numpy
+pandas
+matplotlib
+scipy
+hashlib
+pytube
+pydantic
+tqdm

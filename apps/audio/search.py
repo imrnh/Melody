@@ -13,7 +13,6 @@ class FingerprintPipeline:
         self.database_file = "database/database.pickle"
         self.song_index_file = "database/song_index.pickle"
         self.database = None
-        self.song_name_index = None
 
     def create_constellation(self, audio, Fs):
         window_length_seconds = 0.5
@@ -68,7 +67,6 @@ class FingerprintPipeline:
 
     def load_database(self):
         self.database = pickle.load(open(self.database_file, 'rb'))
-        self.song_name_index = pickle.load(open(self.song_index_file, "rb"))
 
     def transform_audio(self, audio_path, song_id):
         sr, audio_content = read(audio_path)

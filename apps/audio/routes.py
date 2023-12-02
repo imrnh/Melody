@@ -1,15 +1,15 @@
 import os, asyncpg, json, pickle
-from fastapi import APIRouter, UploadFile
+from fastapi import APIRouter, UploadFile, Form
 from .search import FingerprintPipeline
 from .to_wav import m4a_to_wav
 from .downloader import MusicDownloader
 from decouple import config
 from typing import List, Dict, Tuple
+from utilities import save_identification_history, load_identification_history
 
 router = APIRouter()
 
 DATABASE_URL = config('DATABASE_URL')
-
 
 
 @router.get("/crawle")
@@ -30,7 +30,7 @@ async def perform_crawling():
 
         # Get all music id and url that doesn't have audio_hash_available
         connection = await asyncpg.connect(DATABASE_URL)
-        query_all_music_without_audio_hash="select id, playback_url as url from music where audio_hash_available=false;"
+        query_all_music_without_audio_hash = "select id, playback_url as url from music where audio_hash_available=false;"
         r_response = await connection.fetch(query_all_music_without_audio_hash)
 
         # Iterate over all music, download the video and convert it into hashes.
@@ -61,14 +61,14 @@ async def perform_crawling():
             # query_update_audio_hash_available = "update music set audio_hash_available=true where id = $1;"
             # await connection.execute(query_update_audio_hash_available, r_music['id'])
 
-        return {"status": 200, "songs_modified": r_response }
+        return {"status": 200, "songs_modified": r_response}
 
     except Exception as e:
         return {"msg": f"Something went wrong {e}"}
 
 
-@router.post("/uploadfile/")
-async def upload_file(file: UploadFile):
+@router.post("/identify/")
+async def upload_file(file: UploadFile, user_id: str = Form(...)):
     try:
         if file.filename:
             filePath = os.path.join("assets/torec/", file.filename)
@@ -79,10 +79,41 @@ async def upload_file(file: UploadFile):
             m4a_to_wav(file.filename)
 
             fingerprint_obj = FingerprintPipeline()
-            songs = fingerprint_obj.recognize(file.filename + ".wav")
+            song_ids = fingerprint_obj.recognize(file.filename + ".wav")
+
+            await save_identification_history(uid=user_id, song_id=song_ids[0])
+
+            # get song info
+            songs = []
+
+            conn = await asyncpg.connect(DATABASE_URL)
+
+            for song_id in song_ids:
+                _qry = "select * from music where id=$1;"
+                res = await conn.fetch(_qry, song_id)
+                songs.append(res)
+
 
             return {"songs": songs}
 
     except Exception as e:
         print("Exception: ", e)
     return {"message": "No file received"}
+
+
+@router.post("/view_history/")
+async def upload_file(user_id: str):
+
+        conn = await asyncpg.connect(DATABASE_URL)
+
+        _qry = "select * from  history where  user_id = $1;"
+        resulting_music_ids = await conn.fetch(_qry, user_id);
+
+
+        songs = []
+        for song_id in resulting_music_ids:
+            _qry = "select * from music where id=$1;"
+            res = await conn.fetch(_qry, song_id)
+            songs.append(res)
+
+        return {'songs': songs}
