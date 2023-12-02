@@ -5,3 +5,7 @@ pydub
 ffprobe
 python-decouple
 asyncpg
+numpy
+pandas
+matplotlib
+scipy
