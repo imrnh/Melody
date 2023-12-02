@@ -11,3 +11,5 @@ matplotlib
 scipy
 hashlib
 pytube
+decouple
+pydantic
